@@ -69,12 +69,12 @@ jobs:
         with:
           name: server-app
 
-      - name: Login to Azure
-        uses: azure/login@v2
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_6291ADDBAF234373AB75C1A6C5D0175A }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2A4D435ED5A140959C4AAAE0BCE2CC19 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_9AEF3683B74A44108FC63A8A2412E5E0 }}
+          app-name: ulimasocial-api
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
 
       - name: Deploy backend to Azure Web App
         uses: azure/webapps-deploy@v3
