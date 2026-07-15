@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  base: '/Proyecto-programacion-web-Ulima-Social-/',
   server: {
     port: 5173,
     // Proxy para evitar problemas de CORS en desarrollo
