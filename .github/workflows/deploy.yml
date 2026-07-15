@@ -1,61 +1,52 @@
-name: Deploy React Vite to GitHub Pages
+name: Build and Deploy Backend to Azure Web App
 
 on:
   push:
     branches:
       - main
+    paths:
+      - "server/**"
+      - ".github/workflows/main_ulimasocial-api.yml"
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: client
+        working-directory: server
 
     steps:
+      # Clonar el repositorio
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      # Instalar Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: client/package-lock.json
+          cache-dependency-path: server/package-lock.json
 
+      # Instalar dependencias
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Build project
-        run: npm run build
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+      # Generar Prisma Client
+      - name: Generate Prisma Client
+        run: npx prisma generate
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      # Ejecutar tests si existen
+      - name: Run tests
+        run: npm run test --if-present
+
+      # Desplegar directamente a Azure
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
         with:
-          path: client/dist
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    runs-on: ubuntu-latest
-
-    needs: build
-
-    steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+          app-name: ulimasocial-api
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ./server
