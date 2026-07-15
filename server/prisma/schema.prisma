@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum user_status {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum friendship_status {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BLOCKED
+}
+
+enum token_type {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum post_visibility {
+  PUBLIC
+  FRIENDS
+  PRIVATE
+}
+
+enum group_visibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum group_member_role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum conversation_type {
+  DIRECT
+  GROUP
+}
+
+enum notification_type {
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
+  POST_LIKE
+  POST_COMMENT
+  GROUP_INVITATION
+  GROUP_JOINED
+  NEW_MESSAGE
+  SYSTEM
+}
+
+model User {
+  id             String      @id
+  name           String
+  lastName       String      @map("last_name")
+  studentCode    String      @unique @map("student_code")
+  email          String
+  passwordHash   String      @map("password_hash")
+  career         String
+  cycle          String
+  profilePicture String?     @map("profile_picture")
+  verified       Boolean     @default(false)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  bio            String?
+  coverPicture   String?     @map("cover_picture")
+  status         user_status @default(ACTIVE)
+  updatedAt      DateTime    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?   @map("deleted_at") @db.Timestamptz(6)
+  lastLoginAt    DateTime?   @map("last_login_at") @db.Timestamptz(6)
+
+  posts                    Post[]
+  likes                    PostLike[]
+  comments                 Comment[]
+  sentFriendships          Friendship[]         @relation("Requester")
+  receivedFriendships      Friendship[]         @relation("Addressee")
+  groupMemberships         GroupMember[]
+  ownedGroups              Group[]              @relation("GroupOwner")
+  sentGroupInvitations     GroupInvitation[]    @relation("GroupInvitationInviter")
+  receivedGroupInvitations GroupInvitation[]    @relation("GroupInvitationInvitee")
+  createdConversations     Conversation[]       @relation("ConversationCreator")
+  sentMessages             Message[]
+  conversationMemberships  ConversationMember[]
+  tokens                   VerificationToken[]
+  notifications            Notification[]       @relation("NotificationOwner")
+  actedNotifications       Notification[]       @relation("NotificationActor")
+
+  @@map("users")
+}
+
+model VerificationToken {
+  id        BigInt     @id @default(autoincrement())
+  userId    String     @map("user_id")
+  tokenHash String     @map("token_hash")
+  type      token_type
+  expiresAt DateTime   @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime?  @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("verification_tokens")
+}
+
+model Post {
+  id         Int             @id @default(autoincrement())
+  content    String
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  authorId   String          @map("author_id")
+  imageUrl   String?         @map("image_url")
+  visibility post_visibility @default(PUBLIC)
+  updatedAt  DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt  DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  author   User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes    PostLike[]
+  comments Comment[]
+
+  @@index([authorId, createdAt])
+  @@map("posts")
+}
+
+model PostLike {
+  id        Int      @id @default(autoincrement())
+  postId    Int      @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("post_likes")
+}
+
+model Comment {
+  id        BigInt    @id @default(autoincrement())
+  postId    Int       @map("post_id")
+  authorId  String    @map("author_id")
+  content   String
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Friendship {
+  id          Int               @id @default(autoincrement())
+  requesterId String            @map("requester_id")
+  addresseeId String            @map("addressee_id")
+  status      friendship_status @default(PENDING)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  requester User @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("Addressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@map("friendships")
+}
+
+model Group {
+  id          Int              @id @default(autoincrement())
+  name        String
+  career      String?
+  emoji       String?
+  description String?
+  imageUrl    String?          @map("image_url")
+  visibility  group_visibility @default(PUBLIC)
+  ownerId     String?          @map("owner_id")
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  owner       User?             @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  members     GroupMember[]
+  invitations GroupInvitation[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  groupId  Int               @map("group_id")
+  userId   String            @map("user_id")
+  role     group_member_role @default(MEMBER)
+  joinedAt DateTime          @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@map("group_members")
+}
+
+model GroupInvitation {
+  id        BigInt            @id @default(autoincrement())
+  groupId   Int               @map("group_id")
+  inviterId String            @map("inviter_id")
+  inviteeId String            @map("invitee_id")
+  status    friendship_status @default(PENDING)
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviter User  @relation("GroupInvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee User  @relation("GroupInvitationInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@map("group_invitations")
+}
+
+model Conversation {
+  id        BigInt            @id @default(autoincrement())
+  type      conversation_type @default(DIRECT)
+  name      String?
+  imageUrl  String?           @map("image_url")
+  createdBy String?           @map("created_by")
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  creator  User?                @relation("ConversationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  members  ConversationMember[]
+  messages Message[]
+
+  @@map("conversations")
+}
+
+model ConversationMember {
+  conversationId BigInt    @map("conversation_id")
+  userId         String    @map("user_id")
+  joinedAt       DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+  lastReadAt     DateTime? @map("last_read_at") @db.Timestamptz(6)
+  leftAt         DateTime? @map("left_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@map("conversation_members")
+}
+
+model Message {
+  id             BigInt    @id @default(autoincrement())
+  conversationId BigInt    @map("conversation_id")
+  senderId       String    @map("sender_id")
+  content        String?
+  imageUrl       String?   @map("image_url")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Notification {
+  id         BigInt            @id @default(autoincrement())
+  userId     String            @map("user_id")
+  actorId    String?           @map("actor_id")
+  type       notification_type
+  entityType String?           @map("entity_type")
+  entityId   String?           @map("entity_id")
+  content    String?
+  isRead     Boolean           @default(false) @map("is_read")
+  readAt     DateTime?         @map("read_at") @db.Timestamptz(6)
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user  User  @relation("NotificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@map("notifications")
+}
